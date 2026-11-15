@@ -1,7 +1,8 @@
 # ContentAddress
 
 [![CI](https://github.com/kapildhinwa2010-dev/ContentAddress/actions/workflows/ci.yml/badge.svg)](https://github.com/kapildhinwa2010-dev/ContentAddress/actions/workflows/ci.yml)
-[![CI](https://github.com/kapildhinwa2010-dev/ContentAddress/actions/workflows/codeql.yml/badge.svg)](https://github.com/kapildhinwa2010-dev/ContentAddress/actions/workflows/codeql.yml)
+[![CodeQL](https://github.com/kapildhinwa2010-dev/ContentAddress/actions/workflows/codeql.yml/badge.svg)](https://github.com/kapildhinwa2010-dev/ContentAddress/actions/workflows/codeql.yml)
+
 
 Spiral-addressed memory with XOR parity protection.
 
