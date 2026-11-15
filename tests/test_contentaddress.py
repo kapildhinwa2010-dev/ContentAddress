@@ -1,6 +1,8 @@
+import hashlib
+
 import pytest
 
-from contentaddress import HelixMemory, spiral_coordinates
+from contentaddress import ContentStore, spiral_coordinates
 
 
 def test_spiral_starts_at_center():
@@ -27,49 +29,86 @@ def test_spiral_rejects_zero():
         spiral_coordinates(0)
 
 
-def test_write_read_roundtrip():
-    mem = HelixMemory(size=8, record_size=4)
-    mem.write("alpha", b"\x01\x02\x03\x04")
-    assert isinstance(mem.read_cell("alpha"), int)
+def test_spiral_size_one():
+    assert spiral_coordinates(1) == [(0, 0)]
 
 
-def test_write_rejects_wrong_record_size():
-    mem = HelixMemory(size=8, record_size=4)
-    with pytest.raises(ValueError):
-        mem.write("alpha", b"\x01\x02")
+# --- content addressing (ContentAddress-specific) ---
 
 
-def test_address_deterministic():
-    mem = HelixMemory(size=8)
-    assert mem.address("key") == mem.address("key")
+def test_put_returns_sha256_digest():
+    store = ContentStore(size=4)
+    digest = store.put(b"hello")
+    assert digest == hashlib.sha256(b"hello").hexdigest()
 
 
-def test_verify_true_after_write():
-    mem = HelixMemory(size=8, record_size=2)
-    mem.write("a", b"\x10\x20")
-    mem.write("b", b"\x30\x40")
-    assert mem.verify() is True
+def test_put_get_roundtrip():
+    store = ContentStore(size=4)
+    digest = store.put(b"\x01\x02\x03")
+    assert store.get(digest) == b"\x01\x02\x03"
 
 
-def test_corrupt_breaks_parity():
-    mem = HelixMemory(size=8, record_size=2)
-    mem.write("a", b"\x10\x20")
-    mem.corrupt("a")
-    assert mem.verify() is False
+def test_dedup_identical_content():
+    store = ContentStore(size=4)
+    d1 = store.put(b"same")
+    d2 = store.put(b"same")
+    assert d1 == d2
+    assert len(store) == 1
+    assert store.usage() == pytest.approx(1 / 16)
 
 
-def test_usage_and_len():
-    mem = HelixMemory(size=8, record_size=2)
-    mem.write("a", b"\x01\x02")
-    mem.write("b", b"\x03\x04")
-    assert len(mem) == 2
-    assert mem.usage() == pytest.approx(2 / 64)
+def test_distinct_content_distinct_digests():
+    store = ContentStore(size=4)
+    d1 = store.put(b"a")
+    d2 = store.put(b"b")
+    assert d1 != d2
+    assert len(store) == 2
+
+
+def test_get_missing_raises_keyerror():
+    store = ContentStore(size=4)
+    with pytest.raises(KeyError):
+        store.get("0" * 64)
+
+
+def test_get_rejects_non_string():
+    store = ContentStore(size=4)
+    with pytest.raises(TypeError):
+        store.get(123)
+
+
+def test_verify_true_and_false_after_tamper():
+    store = ContentStore(size=4)
+    digest = store.put(b"payload")
+    assert store.verify(digest) is True
+    store.records[digest] = b"tampered"
+    assert store.verify(digest) is False
+
+
+def test_has():
+    store = ContentStore(size=4)
+    digest = store.put(b"x")
+    assert store.has(digest) is True
+    assert store.has("f" * 64) is False
+
+
+def test_slot_assignment_in_spiral_order():
+    store = ContentStore(size=4)
+    coords = spiral_coordinates(4)
+    d1 = store.put(b"first")
+    d2 = store.put(b"second")
+    assert store.slot_of(d1) == coords[0]
+    assert store.slot_of(d2) == coords[1]
+
+
+def test_store_full_raises():
+    store = ContentStore(size=2)
+    for i in range(4):
+        store.put(bytes([i]))
+    with pytest.raises(MemoryError):
+        store.put(b"overflow")
 
 
 def test_constructor_rejects_zero():
     with pytest.raises(ValueError):
-        HelixMemory(size=0)
-
-
-def test_spiral_size_one():
-    assert spiral_coordinates(1) == [(0, 0)]
+        ContentStore(size=0)
